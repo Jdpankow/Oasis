@@ -7,6 +7,7 @@
 #include "Oasis/Multiply.hpp"
 #include "Oasis/Variable.hpp"
 #include "Oasis/Exponent.hpp"
+#include "Oasis/Subtract.hpp"
 
 namespace Oasis {
 
@@ -72,10 +73,17 @@ auto Divide<Expression>::Simplify() const -> std::unique_ptr<Expression>
         //Expressions
         for (auto sortingLeft=Multiply<Expression, Expression>::Specialize(*leftover); sortingLeft != nullptr;){
             if (sortingLeft->GetLeastSigOp().GetType()==ExpressionType::Exponent){
+                
+                //Two cases here, real and expression powers
                 auto useable=sortingLeft->Generalize();
                 const auto& sortingLeftLeastSigOp = dynamic_cast<const Exponent<Expression>&>(*useable);
-                double val = dynamic_cast<const Real&>(sortingLeftLeastSigOp.GetMostSigOp()).GetValue();
-                topexpress.push_back(std::make_pair(sortingLeftLeastSigOp.GetLeastSigOp().Copy(), val));
+                if (sortingLeftLeastSigOp.GetMostSigOp().GetType()==ExpressionType::Real){
+                    double val = dynamic_cast<const Real&>(sortingLeftLeastSigOp.GetMostSigOp()).GetValue();
+                    topexpress.push_back(std::make_pair(sortingLeftLeastSigOp.GetLeastSigOp().Copy(), val));
+                }
+                else{
+                    topexpress.push_back(std::make_pair(sortingLeft->GetLeastSigOp().Copy(), 1));
+                }
             }
             else{
                 topexpress.push_back(std::make_pair(sortingLeft->GetLeastSigOp().Copy(), 1));
@@ -85,6 +93,18 @@ auto Divide<Expression>::Simplify() const -> std::unique_ptr<Expression>
         }
 
 
+
+    //Divides within divides
+    //What about exponents that are expressions 
+
+    /*
+    Should be checking if 4^(x+4)/4^(x+y)=4^(4-y)
+    With how this currently working I would need to find like terms, then subtract the exponents, then put it as an expression and put 1 
+    as the other part of the pair so that it isnt represented as an exponenet
+
+    If theres a divide within an exponent, should simplify to a top^exponent/bot^exponent (done within exponent not divide) (now fixed)
+    If there is a divide within a divide, should push one side of that to the top and one to the bot, depending if the whole divide is on the top or bottom
+    */
 
         if (leftover->GetType()==ExpressionType::Variable){
             auto temp=Variable::Specialize(*leftover);
@@ -130,17 +150,35 @@ auto Divide<Expression>::Simplify() const -> std::unique_ptr<Expression>
             if (sortingRight->GetLeastSigOp().GetType()==ExpressionType::Exponent){
                 auto useable=sortingRight->Generalize();
                 const auto& sortingRightLeastSigOp = dynamic_cast<const Exponent<Expression>&>(*useable);
-                double val = dynamic_cast<const Real&>(sortingRightLeastSigOp.GetMostSigOp()).GetValue();
-                std::list<std::pair<std::unique_ptr<Expression>, double>>::iterator it;
-                for (it = topexpress.begin(); it != topexpress.end(); ++it){
-                    if (it->first==sortingRightLeastSigOp.GetLeastSigOp().Copy()){
-                        checked=false;
-                        topexpress.push_back(std::make_pair(sortingRightLeastSigOp.GetLeastSigOp().Copy(), it->second-val));
-                        topexpress.erase(it);
+                if (sortingRightLeastSigOp.GetMostSigOp().GetType()==ExpressionType::Real){
+                    double val = dynamic_cast<const Real&>(sortingRightLeastSigOp.GetMostSigOp()).GetValue();
+                    std::list<std::pair<std::unique_ptr<Expression>, double>>::iterator it;
+                    for (it = topexpress.begin(); it != topexpress.end(); ++it){
+                        if (it->first==sortingRightLeastSigOp.GetLeastSigOp().Copy()){
+                            checked=false;
+                            topexpress.push_back(std::make_pair(sortingRightLeastSigOp.GetLeastSigOp().Copy(), it->second-val));
+                            topexpress.erase(it);
+                        }
                     }
-                }
-                if (checked){
-                    topexpress.push_back(std::make_pair(sortingRightLeastSigOp.GetLeastSigOp().Copy(), -val));
+                    if (checked){
+                        topexpress.push_back(std::make_pair(sortingRightLeastSigOp.GetLeastSigOp().Copy(), -val));
+                    }
+                } //Below is the case where it is an expression to the power of an expression
+                else{
+                    double val = dynamic_cast<const Real&>(sortingRightLeastSigOp.GetMostSigOp()).GetValue();
+                    std::list<std::pair<std::unique_ptr<Expression>, double>>::iterator it;
+                    for (it = topexpress.begin(); it != topexpress.end(); ++it){
+                        const auto& listitem = dynamic_cast<const Exponent<Expression>&>(*(it->first));
+                        if (listitem.GetLeastSigOp().Copy()==sortingRightLeastSigOp.GetLeastSigOp().Copy()){
+                            checked=false;
+                            auto newExpon = (Exponent<Expression>{listitem.GetLeastSigOp(), Subtract{listitem.GetMostSigOp(),sortingRightLeastSigOp.GetMostSigOp()}}.Simplify());
+                            topexpress.push_back(std::make_pair(newExpon->Copy(), 1));
+                            topexpress.erase(it);
+                        }
+                    } /// 2*(y*(x*z))=(2*x)*(y*z)   2    *   (x*y)*z
+                    if (checked){
+                        topexpress.push_back(std::make_pair(sortingRightLeastSigOp.GetLeastSigOp().Copy(), -val));
+                    }
                 }
             }
             else{

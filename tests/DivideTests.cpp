@@ -61,6 +61,29 @@ TEST_CASE("Symbolic Division, equal variables", "[Division][Symbolic]")
             }   }
         };
 
+    /*
+    Oasis::Divide div2 {
+        Oasis::Multiply {
+            Oasis::Multiply {
+                Oasis::Real { 2.0 },
+                Oasis::Variable{ "z" }},
+            Oasis::Multiply{
+                Oasis::Variable{ "y" },
+                Oasis::Variable{ "x" }
+                }
+            },
+        Oasis::Multiply {
+            Oasis::Multiply {
+                Oasis::Real { 1.0 },
+                Oasis::Variable{ "y" }},
+            Oasis::Multiply{
+                Oasis::Variable{ "z" },
+                Oasis::Variable{ "x" }
+            }
+        }
+    };
+    */
+
     auto simplified = div.Simplify();
     REQUIRE(simplified->Is<Oasis::Real>());
     auto simplifiedReal = dynamic_cast<Oasis::Real&>(*simplified);
